@@ -222,7 +222,11 @@ extract_info(Req) ->
                                   end, {[], Req2},
                                   ['Referer', 'X-Client-Ip', 'X-Forwarded-For',
                                    'X-Cluster-Client-Ip', 'Via', 'X-Real-Ip']),
+    {cowboy, CReq0} = Req3,
+    {Cookies, CReq1} = cowboy_http_req:cookies(CReq0),
+    Req4 = {cowboy, CReq1},
     {[{peername, Peer},
       {sockname, Sock},
       {path, Path},
-      {headers, Headers}], Req3}.
+      {headers, Headers},
+      {cookies, Cookies}], Req4}.
