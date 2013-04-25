@@ -1,3 +1,9 @@
+%% ***** BEGIN LICENSE BLOCK *****
+%% Copyright (c) 2011-2012 VMware, Inc.
+%%
+%% For the license see COPYING.
+%% ***** END LICENSE BLOCK *****
+
 -module(sockjs_action).
 
 % none
@@ -59,7 +65,7 @@ options(Req, Headers, _Service) ->
 iframe(Req, Headers, #service{sockjs_url = SockjsUrl}) ->
     IFrame = io_lib:format(?IFRAME, [SockjsUrl]),
     MD5 = "\"" ++ binary_to_list(base64:encode(erlang:md5(IFrame))) ++ "\"",
-    {H, Req2} = sockjs_http:header('If-None-Match', Req),
+    {H, Req2} = sockjs_http:header('if-none-match', Req),
     case H of
         MD5 -> sockjs_http:reply(304, Headers, "", Req2);
         _   -> sockjs_http:reply(
@@ -131,10 +137,17 @@ jsonp(Req, Headers, Service, SessionId) ->
 verify_callback(Req, Success) ->
     {CB, Req1} = sockjs_http:callback(Req),
     case CB of
-        undefined ->
-            sockjs_http:reply(500, [], "\"callback\" parameter required", Req1);
+        X when X =:= undefined orelse X =:= [] ->
+            sockjs_http:reply(500, [],
+                              "\"callback\" parameter required", Req1);
         _ ->
-            Success(Req1, CB)
+            case re:run(CB, "[^a-zA-Z0-9-_.]") of
+                {match, _} ->
+                    sockjs_http:reply(500, [],
+                                      "invalid \"callback\" parameter", Req1);
+                nomatch ->
+                    Success(Req1, CB)
+            end
     end.
 
 %% --------------------------------------------------------------------------

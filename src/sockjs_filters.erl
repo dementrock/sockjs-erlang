@@ -1,3 +1,9 @@
+%% ***** BEGIN LICENSE BLOCK *****
+%% Copyright (c) 2011-2012 VMware, Inc.
+%%
+%% For the license see COPYING.
+%% ***** END LICENSE BLOCK *****
+
 -module(sockjs_filters).
 
 -include("sockjs_internal.hrl").
@@ -38,14 +44,14 @@ h_no_cache(Req, Headers) ->
 
 -spec xhr_cors(req(), headers()) -> {headers(), req()}.
 xhr_cors(Req, Headers) ->
-    {OriginH, Req1} = sockjs_http:header('Origin', Req),
+    {OriginH, Req1} = sockjs_http:header('origin', Req),
      Origin = case OriginH of
                   "null"    -> "*";
                   undefined -> "*";
                   O         -> O
               end,
     {HeadersH, Req2} = sockjs_http:header(
-                             'Access-Control-Request-Headers', Req1),
+                             'access-control-request-headers', Req1),
     AllowHeaders = case HeadersH of
                        undefined -> [];
                        V         -> [{"Access-Control-Allow-Headers", V}]

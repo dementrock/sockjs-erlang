@@ -1,8 +1,15 @@
+%% ***** BEGIN LICENSE BLOCK *****
+%% Copyright (c) 2011-2012 VMware, Inc.
+%%
+%% For the license see COPYING.
+%% ***** END LICENSE BLOCK *****
+
 -module(sockjs_util).
 
 -export([rand32/0]).
 -export([encode_frame/1]).
 -export([url_escape/2]).
+-export([cancel_send_after/2]).
 
 -include("sockjs_internal.hrl").
 
@@ -46,3 +53,11 @@ hex(C) ->
     High = integer_to_list(High0),
     Low = integer_to_list(Low0),
     "%" ++ High ++ Low.
+
+-spec cancel_send_after(reference(), atom()) -> ok.
+cancel_send_after(Timer, Atom) ->
+    case erlang:cancel_timer(Timer) of
+        false -> receive Atom -> ok
+                 after   0    -> ok end;
+        _ -> ok
+    end.

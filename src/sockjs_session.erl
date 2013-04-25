@@ -1,3 +1,9 @@
+%% ***** BEGIN LICENSE BLOCK *****
+%% Copyright (c) 2011-2012 VMware, Inc.
+%%
+%% For the license see COPYING.
+%% ***** END LICENSE BLOCK *****
+
 -module(sockjs_session).
 
 -behaviour(gen_server).
@@ -77,27 +83,17 @@ close(Code, Reason, {?MODULE, {SPid, _}}) ->
 info({?MODULE, {_SPid, Info}}) ->
     Info.
 
--spec reply(session_or_pid()) ->
-                   wait | session_in_use | {ok | close, frame()}.
+-spec reply(session_or_pid()) -> wait | session_in_use | {ok | close, frame()}.
 reply(Session) ->
     reply(Session, true).
 
--spec reply(session_or_pid(), boolean()) ->
-                   wait | session_in_use | {ok | close, frame()}.
+-spec reply(session_or_pid(), boolean()) -> wait | session_in_use | {ok | close, frame()}.
 reply(SessionPid, Multiple) when is_pid(SessionPid) ->
     gen_server:call(SessionPid, {reply, self(), Multiple}, infinity);
 reply(SessionId, Multiple) ->
     reply(spid(SessionId), Multiple).
 
 %% --------------------------------------------------------------------------
-
-cancel_timer_safe(Timer, Atom) ->
-    case erlang:cancel_timer(Timer) of
-        false ->
-             receive Atom -> ok
-             after 0 -> ok end;
-        _ -> ok
-    end.
 
 spid(SessionId) ->
     case ets:lookup(?ETS, SessionId) of
@@ -116,7 +112,7 @@ mark_waiting(Pid, State = #session{response_pid    = undefined,
                                    heartbeat_delay = HeartbeatDelay})
   when DisconnectTRef =/= undefined ->
     link(Pid),
-    cancel_timer_safe(DisconnectTRef, session_timeout),
+    _ = sockjs_util:cancel_send_after(DisconnectTRef, session_timeout),
     TRef = erlang:send_after(HeartbeatDelay, self(), heartbeat_triggered),
     State#session{response_pid    = Pid,
                   disconnect_tref = undefined,
@@ -132,7 +128,8 @@ unmark_waiting(RPid, State = #session{response_pid     = RPid,
     _ = case HeartbeatTRef of
             undefined -> ok;
             triggered -> ok;
-            _Else     -> cancel_timer_safe(HeartbeatTRef, heartbeat_triggered)
+            _Else     -> sockjs_util:cancel_send_after(
+                           HeartbeatTRef, heartbeat_triggered)
         end,
     TRef = erlang:send_after(DisconnectDelay, self(), session_timeout),
     State#session{response_pid    = undefined,
@@ -144,7 +141,7 @@ unmark_waiting(_Pid, State = #session{response_pid     = undefined,
                                       disconnect_tref  = DisconnectTRef,
                                       disconnect_delay = DisconnectDelay})
   when DisconnectTRef =/= undefined ->
-    cancel_timer_safe(DisconnectTRef, session_timeout),
+    _ = sockjs_util:cancel_send_after(DisconnectTRef, session_timeout),
     TRef = erlang:send_after(DisconnectDelay, self(), session_timeout),
     State#session{disconnect_tref = TRef};
 
@@ -163,9 +160,14 @@ emit(What, State = #session{callback = Callback,
                 Callback(Handle, What, UserState);
             _ when is_atom(Callback) ->
                 case What of
-                    init         -> Callback:sockjs_init(Handle, UserState);
-                    {recv, Data} -> Callback:sockjs_handle(Handle, Data, UserState);
-                    closed       -> Callback:sockjs_terminate(Handle, UserState)
+                    init            -> Callback:sockjs_init(Handle, UserState);
+                    {recv, Data}    -> Callback:sockjs_handle(Handle, Data, UserState);
+                    {message, Data} -> Callback:sockjs_info(Handle, What, UserState);
+                    {messages, Data}-> Callback:sockjs_info(Handle, What, UserState);
+                    {info, Info}    -> Callback:sockjs_info(Handle, Info, UserState);
+                    tick            -> Callback:sockjs_info(Handle, What, UserState);
+                    force_disconnect-> Callback:sockjs_info(Handle, What, UserState);
+                    closed          -> Callback:sockjs_terminate(Handle, UserState)
                 end
         end,
     case R of
@@ -273,6 +275,19 @@ handle_cast({close, Status, Reason},  State = #session{response_pid = RPid}) ->
 handle_cast(Cast, State) ->
     {stop, {odd_cast, Cast}, State}.
 
+% Allow a handle_info-like call in sockjs handler. For now only messages of the form {message, X}, {messages, X}, tick, and force_disconnect are supported
+% This is useful in cases where we have some main process sending message to processes corresponding to connections.
+handle_info({message, Raw}, State) -> 
+    {noreply, emit({message, Raw}, State)};
+
+handle_info({messages, Raw}, State) -> 
+    {noreply, emit({messages, Raw}, State)};
+
+handle_info(tick, State) ->
+    {noreply, emit(tick, State)};
+
+handle_info(force_disconnect, State) ->
+    {noreply, emit(force_disconnect, State)};
 
 handle_info({'EXIT', Pid, _Reason},
             State = #session{response_pid = Pid}) ->
@@ -293,7 +308,8 @@ handle_info(heartbeat_triggered, State = #session{response_pid = RPid}) when RPi
     {noreply, State#session{heartbeat_tref = triggered}};
 
 handle_info(Info, State) ->
-    {stop, {odd_info, Info}, State}.
+    State2 = emit({info, Info}, State),
+    {noreply, State2}.
 
 
 terminate(_, State = #session{id = SessionId}) ->

@@ -1,3 +1,9 @@
+%% ***** BEGIN LICENSE BLOCK *****
+%% Copyright (c) 2011-2012 VMware, Inc.
+%%
+%% For the license see COPYING.
+%% ***** END LICENSE BLOCK *****
+
 -module(sockjs_handler).
 
 -export([init_state/4]).
@@ -7,7 +13,7 @@
 
 -include("sockjs_internal.hrl").
 
--define(SOCKJS_URL, "https://d1fxtkz8shb9d2.cloudfront.net/sockjs-0.3.min.js").
+-define(SOCKJS_URL, "http://cdn.sockjs.org/sockjs-0.3.2.min.js").
 
 %% --------------------------------------------------------------------------
 
@@ -28,6 +34,8 @@ init_state(Prefix, Callback, State, Options) ->
                  proplists:get_value(heartbeat_delay, Options, 25000),
              response_limit =
                  proplists:get_value(response_limit, Options, 128*1024),
+             hib_timeout =
+                 proplists:get_value(hib_timeout, Options, 5000),
              logger =
                  proplists:get_value(logger, Options, fun default_logger/3)
             }.
@@ -51,7 +59,7 @@ valid_ws_request(_Service, Req) ->
     {R1 and R2, Req2, {R1, R2}}.
 
 valid_ws_upgrade(Req) ->
-    case sockjs_http:header('Upgrade', Req) of
+    case sockjs_http:header('upgrade', Req) of
         {undefined, Req2} ->
             {false, Req2};
         {V, Req2} ->
@@ -64,7 +72,7 @@ valid_ws_upgrade(Req) ->
     end.
 
 valid_ws_connection(Req) ->
-    case sockjs_http:header('Connection', Req) of
+    case sockjs_http:header('connection', Req) of
         {undefined, Req2} ->
             {false, Req2};
         {V, Req2} ->
@@ -93,11 +101,7 @@ strip_prefix(LongPath, Prefix) ->
     end.
 
 
--type(dispatch_result() ::
-        nomatch |
-        {match, {send | recv | none , atom(),
-                 server(), session(), list(atom())}} |
-        {bad_method, list(atom())}).
+-type(dispatch_result() :: nomatch | {match, {send | recv | none , atom(), server(), session(), list(atom())}} | {bad_method, list(atom())}).
 
 -spec dispatch_req(service(), req()) -> {dispatch_result(), req()}.
 dispatch_req(#service{prefix = Prefix}, Req) ->
@@ -220,8 +224,8 @@ extract_info(Req) ->
                                               {V, R1}         -> {[{H, V} | Acc], R1}
                                           end
                                   end, {[], Req2},
-                                  ['Referer', 'X-Client-Ip', 'X-Forwarded-For',
-                                   'X-Cluster-Client-Ip', 'Via', 'X-Real-Ip']),
+                                  ['referer', 'x-client-ip', 'x-forwarded-for',
+                                   'x-cluster-client-ip', 'via', 'x-real-ip']),
     {cowboy, CReq0} = Req3,
     {Cookies, CReq1} = cowboy_http_req:cookies(CReq0),
     Req4 = {cowboy, CReq1},

@@ -1,8 +1,13 @@
+%% ***** BEGIN LICENSE BLOCK *****
+%% Copyright (c) 2011-2012 VMware, Inc.
+%%
+%% For the license see COPYING.
+%% ***** END LICENSE BLOCK *****
 
 -type(req()          :: {cowboy, any()}).
 
 -type(user_session() :: nonempty_string()).
--type(emittable()    :: init|closed|{recv, binary()}).
+-type(emittable()    :: init|closed|{recv, binary()}|{info, any()}).
 -type(callback()     :: fun((user_session(), emittable(), any()) -> ok)).
 -type(logger()       :: fun((any(), req(), websocket|http) -> req())).
 
@@ -15,6 +20,7 @@
                   disconnect_delay :: non_neg_integer(),
                   heartbeat_delay  :: non_neg_integer(),
                   response_limit   :: non_neg_integer(),
+                  hib_timeout      :: non_neg_integer() | hibernate,
                   logger           :: logger()
                   }).
 
@@ -24,9 +30,6 @@
 -type(server()  :: nonempty_string()).
 -type(session() :: nonempty_string()).
 
--type(frame()   :: {open, nil} |
-                   {close, {non_neg_integer(), string()}} |
-                   {data, list(iodata())} |
-                   {heartbeat, nil} ).
+-type(frame()   :: {open, nil} | {close, {non_neg_integer(), string()}} | {data, list(iodata())} | {heartbeat, nil} ).
 
 -type(info()    :: [{atom(), any()}]).
